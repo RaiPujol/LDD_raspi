@@ -3,6 +3,7 @@
   "dashboard_port": 8080,
   "draw_port": 8081,
   "photo_seconds": 15,
+  "drawing_history_hours": 24,
   "sleep": {
     "off": "23:00",
     "on": "07:30",

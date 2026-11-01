@@ -78,6 +78,29 @@
   .full img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
   .full.drawing img { background: #fff; max-width: 96vh; max-height: 96vh; border-radius: var(--r); }
 
+
+  /* Drawing timeline (tap the drawing) */
+  .log { position: fixed; inset: 0; background: #000; z-index: 11; display: none;
+    grid-template-columns: auto minmax(0, 1fr); gap: 2vh; padding: 2vh; }
+  .log.open { display: grid; }
+  .log .view { position: relative; height: 96vh; aspect-ratio: 1 / 1; background: #fff; border-radius: var(--r); overflow: hidden; }
+  .log .view img { width: 100%; height: 100%; object-fit: contain; }
+  .log .side { display: flex; flex-direction: column; min-height: 0; }
+  .log .head { display: flex; justify-content: space-between; align-items: center; padding: .4vh .4vh 1.6vh; }
+  .log .head .title { font-size: 2.2vh; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  .log .close { width: 6vh; height: 6vh; border-radius: 50%; background: var(--soft); font-size: 2.6vh; }
+  .log .list { overflow-y: auto; display: flex; flex-direction: column; gap: 1vh; padding-right: .4vh;
+    scrollbar-width: none; }
+  .log .item { display: flex; gap: 1.4vh; align-items: center; padding: 1vh; border-radius: 1.6vh;
+    background: var(--panel); border: .3vh solid transparent; text-align: left; }
+  .log .item.sel { border-color: var(--love); }
+  .log .item img { width: 11vh; height: 11vh; flex: none; background: #fff; border-radius: 1vh; object-fit: contain; }
+  .log .item .when { font-size: 2.6vh; font-variant-numeric: tabular-nums; }
+  .log .item .ago2 { font-size: 1.7vh; color: var(--muted); margin-top: .3vh; }
+  .log .item .msg { font-size: 1.9vh; margin-top: .5vh; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; max-width: 30vw; }
+  .log .none { color: var(--muted); font-size: 2vh; padding: 2vh .4vh; line-height: 1.5; }
+
   /* Sleep */
   .sleep { position: fixed; inset: 0; background: #000; z-index: 50; display: none; }
   .sleep.on { display: block; }
@@ -121,6 +144,13 @@
 </div>
 
 <div class="full" id="full"><img id="fullImg" alt=""></div>
+<div class="log" id="log">
+  <div class="view"><img id="logImg" alt=""><div class="chip note" id="logNote"></div></div>
+  <div class="side">
+    <div class="head"><span class="title" id="logTitle">Last 24 hours</span><button class="close" id="logClose">✕</button></div>
+    <div class="list" id="logList"></div>
+  </div>
+</div>
 <div class="sleep" id="sleep"></div>
 
 <script>
@@ -253,8 +283,43 @@ async function checkDrawing() {
 }
 $("square").addEventListener("click", () => {
   $("square").classList.remove("fresh");
-  if (lastTs > 0) openFull($("drawImg").src, true);
+  if (lastTs > 0) openLog();
 });
+
+// ---------- Drawing timeline: every drawing from the last 24 h ----------
+let logTimer = null;
+function showLogItem(d, src) {
+  $("logImg").src = src;
+  $("logNote").textContent = d.note || "";
+  document.querySelectorAll("#logList .item").forEach(el => el.classList.toggle("sel", +el.dataset.ts === d.ts));
+}
+async function openLog() {
+  let list = [];
+  try { list = await (await fetch("/api/drawings")).json(); } catch {}
+  const hrs = CFG.drawing_history_hours ?? 24;
+  $("logTitle").textContent = `Last ${hrs} hours · ${list.length} drawing${list.length === 1 ? "" : "s"}`;
+  const time = ts => new Date(ts * 1000).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const esc = t => t.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  $("logList").innerHTML = list.length ? list.map(d => `
+    <button class="item" data-ts="${d.ts}">
+      <img src="/drawings/${d.ts}.png" alt="" loading="lazy">
+      <div><div class="when">${time(d.ts)}</div><div class="ago2">${ago(d.ts)}</div>
+      ${d.note ? `<div class="msg">${esc(d.note)}</div>` : ""}</div>
+    </button>`).join("")
+    : `<div class="none">No drawings in the last ${hrs} hours.<br>Showing the most recent one.</div>`;
+  $("logList").querySelectorAll(".item").forEach(el => el.addEventListener("click", () => {
+    const d = list.find(x => x.ts === +el.dataset.ts); showLogItem(d, `/drawings/${d.ts}.png`); restartLogTimer();
+  }));
+  if (list.length) showLogItem(list[0], `/drawings/${list[0].ts}.png`);
+  else showLogItem({ ts: lastTs, note: $("drawNote").textContent }, $("drawImg").src);
+  $("logList").scrollTop = 0;
+  $("log").classList.add("open");
+  restartLogTimer();
+}
+function restartLogTimer() { clearTimeout(logTimer); logTimer = setTimeout(closeLog, 90 * 1000); }
+function closeLog() { $("log").classList.remove("open"); clearTimeout(logTimer); }
+$("logClose").addEventListener("click", closeLog);
+$("logList").addEventListener("scroll", restartLogTimer);
 
 // ---------- Sleep: off at night, tap to wake, moon button to sleep now ----------
 let asleep = null, manual = false, wakeUntil = 0, wasNight = null;
@@ -269,7 +334,7 @@ function setSleep(v) {
   if (v === asleep) return;
   asleep = v;
   $("sleep").classList.toggle("on", v);
-  if (v) closeFull();
+  if (v) { closeFull(); closeLog(); }
   fetch("/api/screen", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ on: !v }) }).catch(() => {});
 }

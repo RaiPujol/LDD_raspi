@@ -51,6 +51,41 @@ def latest_meta():
     return {"ts": 0, "note": ""}
 
 
+HISTORY_SECONDS = float(CFG.get("drawing_history_hours", 24)) * 3600
+
+
+def timeline():
+    """Drawings from the last HISTORY_SECONDS, newest first: [{ts, note}]."""
+    cutoff, out = time.time() - HISTORY_SECONDS, []
+    for f in os.listdir(DRAWINGS):
+        m = re.match(r"^(\d+)\.png$", f)
+        if not m or int(m.group(1)) < cutoff:
+            continue
+        note = ""
+        try:
+            with open(os.path.join(DRAWINGS, m.group(1) + ".json")) as jf:
+                note = json.load(jf).get("note", "")
+        except (OSError, ValueError):
+            pass
+        out.append({"ts": int(m.group(1)), "note": note})
+    return sorted(out, key=lambda d: d["ts"], reverse=True)
+
+
+def prune_forever():
+    """Rolling window: each drawing is deleted HISTORY_SECONDS after it was sent.
+    latest.png (the one in the square) is never deleted."""
+    while True:
+        cutoff = time.time() - HISTORY_SECONDS
+        for f in os.listdir(DRAWINGS):
+            m = re.match(r"^(\d+)\.(png|json)$", f)
+            if m and int(m.group(1)) < cutoff:
+                try:
+                    os.remove(os.path.join(DRAWINGS, f))
+                except OSError:
+                    pass
+        time.sleep(600)
+
+
 class Base(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -81,7 +116,7 @@ class Dashboard(Base):
         if path in ("/", "/index.html"):
             return self.file(os.path.join(WEB, "dashboard.html"))
         if path == "/api/config":
-            keys = ("weather", "clocks", "photo_seconds", "drawing_label", "sleep")
+            keys = ("weather", "clocks", "photo_seconds", "sleep", "drawing_history_hours")
             return self.send(200, {k: CFG[k] for k in keys if k in CFG})
         if path == "/api/photos":
             files = sorted(
@@ -95,6 +130,11 @@ class Dashboard(Base):
             return self.send(200, latest_meta())
         if path == "/drawing.png":
             return self.file(os.path.join(DRAWINGS, "latest.png"))
+        if path == "/api/drawings":
+            return self.send(200, timeline())
+        m = re.match(r"^/drawings/(\d+)\.png$", path)
+        if m:
+            return self.file(os.path.join(DRAWINGS, m.group(1) + ".png"))
         self.send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -193,13 +233,18 @@ class Draw(Base):
         data, png = got
 
         ts = int(time.time())
-        with open(os.path.join(DRAWINGS, f"{ts}.png"), "wb") as f:  # archive
+        while os.path.exists(os.path.join(DRAWINGS, f"{ts}.png")):  # two in the same second
+            ts += 1
+        note = str(data.get("note", ""))[:140]
+        with open(os.path.join(DRAWINGS, f"{ts}.png"), "wb") as f:  # timeline copy
             f.write(png)
+        with open(os.path.join(DRAWINGS, f"{ts}.json"), "w") as f:
+            json.dump({"ts": ts, "note": note}, f)
         tmp = os.path.join(DRAWINGS, "latest.png.tmp")
         with open(tmp, "wb") as f:
             f.write(png)
         os.replace(tmp, os.path.join(DRAWINGS, "latest.png"))
-        meta = {"ts": ts, "note": str(data.get("note", ""))[:140]}
+        meta = {"ts": ts, "note": note}
         tmp = os.path.join(DRAWINGS, "latest.json.tmp")
         with open(tmp, "w") as f:
             json.dump(meta, f)
@@ -216,6 +261,7 @@ def serve(handler, host, port):
 if __name__ == "__main__":
     if CFG.get("key") in ("", "CHANGE-ME"):
         raise SystemExit("Set a secret 'key' in config.json first (setup.sh does this).")
+    threading.Thread(target=prune_forever, daemon=True).start()
     threading.Thread(
         target=serve, args=(Dashboard, "127.0.0.1", CFG["dashboard_port"]), daemon=True
     ).start()

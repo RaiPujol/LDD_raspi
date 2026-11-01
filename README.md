@@ -15,7 +15,7 @@ The screen at home always shows the time and weather, a slideshow of your photos
 <table>
   <tr>
     <td width="32%" valign="top"><b>Partner's phone</b><br>Draw, add a message, send. Or send photos from the camera or gallery.<br><br><img src="docs/phone.png" alt="Phone drawing page"></td>
-    <td valign="top"><b>Tap the drawing</b>: full screen<br><img src="docs/fullscreen-drawing.png" alt="Drawing full screen"><br><br><b>Tap a photo</b>: full screen, uncropped<br><img src="docs/fullscreen-photo.png" alt="Photo full screen"></td>
+    <td valign="top"><b>Tap the drawing</b>: timeline of the last 24 hours<br><img src="docs/timeline.png" alt="Drawing timeline"><br><br><b>Tap a photo</b>: full screen, uncropped<br><img src="docs/fullscreen-photo.png" alt="Photo full screen"></td>
   </tr>
 </table>
 
@@ -27,7 +27,7 @@ The screen at home always shows the time and weather, a slideshow of your photos
 | World clocks with time difference (London, Mexico City) | Add a short message under the drawing |
 | Current weather + 3-day forecast (no API key needed) | Send photos: take one with the camera or pick many from the gallery |
 | Photo slideshow: tap = full screen, swipe = next/previous | Works on iPhone and Android, can be added to the home screen like an app |
-| Latest drawing in a square: tap = full screen, glows when new | |
+| Latest drawing in a square, glows when new. Tap = timeline of every drawing from the last 24 h | |
 | Sleeps at night (23:00 to 07:30), tap to wake, 🌙 button to sleep now | |
 
 ## How it works
@@ -50,7 +50,7 @@ The screen at home always shows the time and weather, a slideshow of your photos
 - **`web/dashboard.html`** is what the touchscreen shows. Weather comes from [Open-Meteo](https://open-meteo.com).
 - **`web/draw.html`** is the page your partner opens on their phone.
 - **`setup.sh`** installs everything: a service that starts the server on boot, full-screen browser at login, screen settings.
-- Photos are saved in `photos/`, every drawing is archived in `drawings/`. Neither folder is uploaded to GitHub.
+- Photos are saved in `photos/`. Drawings are saved in `drawings/` and each one is deleted 24 hours after it was sent (rolling, not at midnight). The newest drawing always stays in the square. Neither folder is uploaded to GitHub.
 
 ## What you need
 
@@ -167,7 +167,7 @@ If it says *"Couldn't reach the screen"*, the Pi is off or offline. The link its
 |---|---|
 | Tap the photo | Full screen, tap again to close (closes by itself after 1 min) |
 | Swipe the photo left / right | Next / previous photo |
-| Tap the drawing | Full screen |
+| Tap the drawing | Timeline: every drawing from the last 24 h with time and message. Tap one to view it, ✕ to close |
 | Tap 🌙 | Screen sleeps now, tap anywhere to wake |
 | 23:00 to 07:30 | Screen off. A tap wakes it for 2 minutes |
 
@@ -195,6 +195,7 @@ sudo systemctl restart pi-dashboard
 | Setting | Meaning |
 |---|---|
 | `photo_seconds` | Seconds each photo stays on screen (default 15) |
+| `drawing_history_hours` | How long each drawing is kept in the timeline before it's deleted (default 24) |
 | `sleep.off` / `sleep.on` | When the screen turns off / on, 24h format (default `23:00` / `07:30`) |
 | `sleep.wake_minutes` | How long a tap at night keeps it awake (default 2) |
 | `weather` | City name, latitude/longitude, time zone, `"celsius"` or `"fahrenheit"` |
@@ -223,7 +224,7 @@ Your `config.json`, photos and drawings are kept: they're not part of the repo.
 | `sudo systemctl restart pi-dashboard` | Restart the server (after changing settings) |
 | `tailscale funnel status` | Shows the public address and whether Funnel is on |
 | `hostname -I` | The Pi's local IP address |
-| `ls ~/LDD_raspi/drawings` | All drawings ever received (one PNG per drawing) |
+| `ls ~/LDD_raspi/drawings` | Drawings from the last 24 h (one PNG + one JSON with the message each) |
 
 ## Troubleshooting
 
