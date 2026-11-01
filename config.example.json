@@ -1,0 +1,32 @@
+{
+  "key": "CHANGE-ME",
+  "dashboard_port": 8080,
+  "draw_port": 8081,
+  "photo_seconds": 15,
+  "sleep": {
+    "off": "23:00",
+    "on": "07:30",
+    "wake_minutes": 2
+  },
+  "weather": {
+    "name": "Pittsburgh",
+    "lat": 40.4406,
+    "lon": -79.9959,
+    "timezone": "America/New_York",
+    "temp_unit": "celsius"
+  },
+  "clocks": [
+    {
+      "name": "Pittsburgh",
+      "tz": "America/New_York"
+    },
+    {
+      "name": "London",
+      "tz": "Europe/London"
+    },
+    {
+      "name": "Mexico City",
+      "tz": "America/Mexico_City"
+    }
+  ]
+}

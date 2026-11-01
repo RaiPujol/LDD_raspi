@@ -1,0 +1,11 @@
+# Your settings + secret key: never commit
+config.json
+
+# Personal content stays on the Pi
+photos/*
+!photos/.gitkeep
+drawings/*
+!drawings/.gitkeep
+
+__pycache__/
+*.tmp

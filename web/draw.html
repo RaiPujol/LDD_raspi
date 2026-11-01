@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0f14">
+<title>Send a drawing ♥</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #0d0f14; color: #eef1f6;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior: none; }
+  body { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 14px; }
+  h1 { font-size: 18px; font-weight: 600; } h1 span { color: #ff6b8b; }
+  .wrap { width: min(92vw, 62vh); aspect-ratio: 1 / 1; }
+  canvas { width: 100%; height: 100%; background: #fff; border-radius: 16px; touch-action: none; display: block; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .color { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; }
+  .color.on { border-color: #fff; transform: scale(1.12); }
+  .size { width: 38px; height: 38px; border-radius: 10px; background: #161a22; border: 2px solid #232936;
+    display: grid; place-items: center; }
+  .size.on { border-color: #fff; }
+  .size i { background: #eef1f6; border-radius: 50%; display: block; }
+  button.act { border: 0; border-radius: 12px; padding: 12px 18px; font-size: 16px; font-weight: 600;
+    background: #232936; color: #eef1f6; }
+  button.send { background: #ff6b8b; color: #fff; padding: 12px 28px; }
+  button:disabled { opacity: .5; }
+  input.note { width: min(92vw, 62vh); padding: 12px 14px; border-radius: 12px; border: 1px solid #232936;
+    background: #161a22; color: #eef1f6; font-size: 16px; }
+  .msg { min-height: 20px; font-size: 15px; color: #8a93a6; }
+  .msg.ok { color: #7ee2a8; } .msg.err { color: #ff8a8a; }
+  .divider { width: min(92vw, 62vh); border-top: 1px solid #232936; margin: 4px 0; }
+  label.photo { border-radius: 12px; padding: 14px 24px; font-size: 16px; font-weight: 600;
+    background: #3a86ff; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+  <h1>Send a drawing <span>♥</span></h1>
+  <div class="wrap"><canvas id="c" width="800" height="800"></canvas></div>
+  <div class="row" id="colors"></div>
+  <div class="row" id="sizes"></div>
+  <input class="note" id="note" maxlength="140" placeholder="Add a short message (optional)">
+  <div class="row">
+    <button class="act" id="undo">Undo</button>
+    <button class="act" id="clear">Clear</button>
+    <button class="act send" id="send">Send</button>
+  </div>
+  <div class="msg" id="msg"></div>
+  <div class="divider"></div>
+  <label class="act photo" for="pick">📷 Send photos</label>
+  <input type="file" id="pick" accept="image/*" multiple hidden>
+  <div class="msg" id="pmsg"></div>
+
+<script>
+// Secret key comes from the link: https://…/#k=SECRET (remembered on this phone)
+const params = new URLSearchParams(location.hash.slice(1) || location.search.slice(1));
+let KEY = params.get("k") || localStorage.getItem("drawKey") || "";
+if (params.get("k")) localStorage.setItem("drawKey", KEY);
+
+const c = document.getElementById("c"), ctx = c.getContext("2d");
+ctx.lineCap = "round"; ctx.lineJoin = "round";
+const COLORS = ["#111111", "#ff4d6d", "#ff9f1c", "#ffd60a", "#2ec4b6", "#3a86ff", "#8338ec", "#ffffff"];
+const SIZES = [4, 10, 20, 40];
+let color = COLORS[0], size = SIZES[1], strokes = [], cur = null;
+
+function redraw() {
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+  for (const s of strokes) {
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.size; ctx.fillStyle = s.color;
+    if (s.pts.length === 1) {
+      ctx.beginPath(); ctx.arc(s.pts[0][0], s.pts[0][1], s.size / 2, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+    ctx.beginPath(); ctx.moveTo(...s.pts[0]);
+    for (let i = 1; i < s.pts.length - 1; i++) {
+      const mx = (s.pts[i][0] + s.pts[i + 1][0]) / 2, my = (s.pts[i][1] + s.pts[i + 1][1]) / 2;
+      ctx.quadraticCurveTo(s.pts[i][0], s.pts[i][1], mx, my);
+    }
+    ctx.lineTo(...s.pts[s.pts.length - 1]); ctx.stroke();
+  }
+}
+function pos(e) {
+  const r = c.getBoundingClientRect();
+  return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height];
+}
+c.addEventListener("pointerdown", e => {
+  c.setPointerCapture(e.pointerId);
+  cur = { color, size, pts: [pos(e)] }; strokes.push(cur); redraw();
+});
+c.addEventListener("pointermove", e => { if (!cur) return; cur.pts.push(pos(e)); redraw(); });
+["pointerup", "pointercancel"].forEach(t => c.addEventListener(t, () => cur = null));
+
+function buildPickers() {
+  const cs = document.getElementById("colors"), ss = document.getElementById("sizes");
+  COLORS.forEach(col => {
+    const b = document.createElement("button");
+    b.className = "color" + (col === color ? " on" : ""); b.style.background = col;
+    if (col === "#ffffff") b.style.boxShadow = "inset 0 0 0 1px #999";
+    b.onclick = () => { color = col; cs.querySelectorAll(".color").forEach(x => x.classList.remove("on")); b.classList.add("on"); };
+    cs.appendChild(b);
+  });
+  SIZES.forEach(sz => {
+    const b = document.createElement("button");
+    b.className = "size" + (sz === size ? " on" : "");
+    const d = Math.max(4, sz / 2); b.innerHTML = `<i style="width:${d}px;height:${d}px"></i>`;
+    b.onclick = () => { size = sz; ss.querySelectorAll(".size").forEach(x => x.classList.remove("on")); b.classList.add("on"); };
+    ss.appendChild(b);
+  });
+}
+const msg = (t, cls = "") => { const m = document.getElementById("msg"); m.textContent = t; m.className = "msg " + cls; };
+
+document.getElementById("undo").onclick = () => { strokes.pop(); redraw(); };
+document.getElementById("clear").onclick = () => { if (!strokes.length || confirm("Clear the drawing?")) { strokes = []; redraw(); } };
+document.getElementById("send").onclick = async () => {
+  if (!KEY) return msg("This link is missing its secret key.", "err");
+  if (!strokes.length) return msg("Draw something first ✏️", "err");
+  const btn = document.getElementById("send"); btn.disabled = true; msg("Sending…");
+  try {
+    const r = await fetch("api/drawing", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: KEY, image: c.toDataURL("image/png"), note: document.getElementById("note").value }),
+    });
+    if (r.ok) { msg("Sent! It's on the screen now ♥", "ok"); }
+    else if (r.status === 403) { msg("Wrong key. Ask for a new link.", "err"); }
+    else { msg("Couldn't send (error " + r.status + ")", "err"); }
+  } catch { msg("Couldn't reach the screen. Is it online?", "err"); }
+  btn.disabled = false;
+};
+
+// ---------- Photos: camera or gallery, several at once ----------
+const pmsg = (t, cls = "") => { const m = document.getElementById("pmsg"); m.textContent = t; m.className = "msg " + cls; };
+function shrink(file, maxSide = 1920) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url); resolve(cv.toDataURL("image/jpeg", 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+    img.src = url;
+  });
+}
+document.getElementById("pick").addEventListener("change", async e => {
+  const files = [...e.target.files]; e.target.value = "";
+  if (!files.length) return;
+  if (!KEY) return pmsg("This link is missing its secret key.", "err");
+  let ok = 0, fail = 0;
+  for (let i = 0; i < files.length; i++) {
+    pmsg(`Sending ${i + 1} of ${files.length}…`);
+    try {
+      const image = await shrink(files[i]);
+      const r = await fetch("api/photo", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: KEY, image }) });
+      if (r.status === 403) return pmsg("Wrong key. Ask for a new link.", "err");
+      r.ok ? ok++ : fail++;
+    } catch { fail++; }
+  }
+  pmsg(fail ? `Sent ${ok}, ${fail} failed` : `Sent ${ok} photo${ok > 1 ? "s" : ""} ♥`, fail ? "err" : "ok");
+});
+
+buildPickers(); redraw();
+</script>
+</body>
+</html>

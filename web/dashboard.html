@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<style>
+  :root {
+    --bg: #000; --panel: #111; --soft: #1a1a1a; --text: #f2f2f2;
+    --muted: #8c8c8c; --accent: #f2b84b; --love: #ff6b8b; --gap: 1.4vh; --r: 2.2vh;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden; cursor: none; user-select: none; -webkit-user-select: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; }
+
+  .grid { display: grid; height: 100vh; gap: var(--gap); padding: var(--gap);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr); }
+  .panel { background: var(--panel); border-radius: var(--r); overflow: hidden; position: relative; }
+  .col { display: flex; flex-direction: column; gap: var(--gap); min-height: 0; }
+
+  /* Left: main clock + weather */
+  .info { display: flex; flex-direction: column; padding: 3vh 2.6vh; height: 100%; }
+  .city { font-size: 2vh; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; }
+  .main-time { font-size: 13.5vh; font-weight: 300; line-height: .95; letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums; margin-top: 2.2vh; }
+  .main-date { font-size: 2.4vh; color: var(--muted); margin-top: 1.2vh; }
+  .weather { margin-top: auto; }
+  .now { display: flex; align-items: center; gap: 1.6vh; }
+  .now .icon { font-size: 7vh; line-height: 1; }
+  .now .temp { font-size: 7vh; font-weight: 300; line-height: 1; }
+  .now .desc { font-size: 2vh; color: var(--muted); margin-top: .6vh; }
+  .days { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1vh; margin-top: 2.2vh; text-align: center; }
+  .day { background: var(--soft); border-radius: 1.4vh; padding: 1.1vh .4vh; }
+  .day .d { font-size: 1.8vh; color: var(--muted); }
+  .day .i { font-size: 3.4vh; margin: .4vh 0; }
+  .day .t { font-size: 1.8vh; }
+  .day .p { font-size: 1.5vh; color: #6fb3ff; margin-top: .2vh; }
+  .moon { position: absolute; top: 2vh; right: 2vh; width: 4.6vh; height: 4.6vh; border-radius: 50%;
+    background: var(--soft); font-size: 2.2vh; display: grid; place-items: center; opacity: .7; }
+
+  /* Middle: photos */
+  .photos img { position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; opacity: 0; transition: opacity 1.5s ease; }
+  .photos img.show { opacity: 1; }
+  .empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    color: var(--muted); font-size: 2.1vh; padding: 3vh; line-height: 1.5; }
+
+  /* Right top: the drawing, edge to edge */
+  .square { aspect-ratio: 1 / 1; width: 100%; flex: none; background: #fff; }
+  .square img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; }
+  .square.has img { display: block; }
+  .square .empty { color: #aaa; }
+  .square.has .empty { display: none; }
+  .chip { position: absolute; background: rgba(0,0,0,.55); color: #fff; border-radius: 99px;
+    font-size: 1.7vh; padding: .5vh 1.2vh; backdrop-filter: blur(4px); }
+  .ago { top: 1.2vh; right: 1.2vh; } .ago .heart { color: var(--love); }
+  .note { bottom: 1.2vh; left: 50%; transform: translateX(-50%); max-width: 90%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 2vh; }
+  .chip:empty, .ago.hide { display: none; }
+  .square.fresh { animation: glow 2s ease-in-out infinite; }
+  @keyframes glow { 0%,100% { box-shadow: 0 0 0 0 rgba(255,107,139,0); }
+                    50% { box-shadow: 0 0 0 .5vh var(--love); } }
+
+  /* Right bottom: world clocks */
+  .world { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-evenly;
+    padding: 1.6vh 2.4vh; }
+  .wc { display: flex; justify-content: space-between; align-items: baseline; gap: 1vh; }
+  .wc .name { font-size: 1.8vh; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+  .wc .diff { font-size: 1.6vh; color: var(--accent); margin-top: .3vh; }
+  .wc .t { font-size: 5vh; font-weight: 300; font-variant-numeric: tabular-nums; line-height: 1; }
+  .wc + .wc { border-top: 1px solid var(--soft); padding-top: 1.2vh; }
+
+  /* Full-screen viewer (photos + drawing) */
+  .full { position: fixed; inset: 0; background: #000; display: none; place-items: center; z-index: 10; }
+  .full.open { display: grid; }
+  .full img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
+  .full.drawing img { background: #fff; max-width: 96vh; max-height: 96vh; border-radius: var(--r); }
+
+  /* Sleep */
+  .sleep { position: fixed; inset: 0; background: #000; z-index: 50; display: none; }
+  .sleep.on { display: block; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <section class="panel">
+    <div class="info">
+      <button class="moon" id="moon" aria-label="Sleep">🌙</button>
+      <div class="city" id="mainCity">Pittsburgh</div>
+      <div class="main-time" id="mainTime">--:--</div>
+      <div class="main-date" id="mainDate"></div>
+      <div class="weather">
+        <div class="now">
+          <div class="icon" id="wIcon">·</div>
+          <div>
+            <div class="temp" id="wTemp">--</div>
+            <div class="desc" id="wDesc">Loading weather…</div>
+          </div>
+        </div>
+        <div class="days" id="wDays"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel photos" id="photos">
+    <img id="imgA" alt=""><img id="imgB" alt="">
+    <div class="empty" id="photosEmpty"><div>No photos yet.</div></div>
+  </section>
+
+  <div class="col">
+    <section class="panel square" id="square">
+      <img id="drawImg" alt="">
+      <div class="empty"><div>Waiting for a drawing…</div></div>
+      <div class="chip ago hide" id="drawAgoChip"><span class="heart">♥</span> <span id="drawAgo"></span></div>
+      <div class="chip note" id="drawNote"></div>
+    </section>
+    <section class="panel world" id="world"></section>
+  </div>
+</div>
+
+<div class="full" id="full"><img id="fullImg" alt=""></div>
+<div class="sleep" id="sleep"></div>
+
+<script>
+let CFG = null;
+const $ = id => document.getElementById(id);
+
+// ---------- Clocks: first = main (left), the rest = world clocks (right) ----------
+function tzOffset(tz, now) {
+  const s = now.toLocaleString("en-US", { timeZone: tz });
+  return (new Date(s) - new Date(now.toLocaleString("en-US", { timeZone: "UTC" }))) / 3600000;
+}
+const hm = (tz, now) => now.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" });
+function renderClocks() {
+  const now = new Date(), [main, ...rest] = CFG.clocks;
+  $("mainCity").textContent = main.name;
+  $("mainTime").textContent = hm(main.tz, now);
+  $("mainDate").textContent = now.toLocaleDateString("en-GB", { timeZone: main.tz, weekday: "long", day: "numeric", month: "long" });
+  const base = tzOffset(main.tz, now);
+  $("world").innerHTML = rest.map(c => {
+    const d = tzOffset(c.tz, now) - base;
+    return `<div class="wc"><div><div class="name">${c.name}</div>
+      <div class="diff">${d === 0 ? "same time" : (d > 0 ? "+" : "") + d + "h"}</div></div>
+      <div class="t">${hm(c.tz, now)}</div></div>`;
+  }).join("");
+}
+
+// ---------- Weather (Open-Meteo, no API key needed) ----------
+const WMO = {
+  0: ["☀️", "Clear"], 1: ["🌤️", "Mainly clear"], 2: ["⛅", "Partly cloudy"], 3: ["☁️", "Overcast"],
+  45: ["🌫️", "Fog"], 48: ["🌫️", "Fog"], 51: ["🌦️", "Light drizzle"], 53: ["🌦️", "Drizzle"],
+  55: ["🌦️", "Heavy drizzle"], 56: ["🌧️", "Freezing drizzle"], 57: ["🌧️", "Freezing drizzle"],
+  61: ["🌧️", "Light rain"], 63: ["🌧️", "Rain"], 65: ["🌧️", "Heavy rain"],
+  66: ["🌧️", "Freezing rain"], 67: ["🌧️", "Freezing rain"], 71: ["🌨️", "Light snow"],
+  73: ["🌨️", "Snow"], 75: ["❄️", "Heavy snow"], 77: ["🌨️", "Snow grains"],
+  80: ["🌦️", "Showers"], 81: ["🌧️", "Showers"], 82: ["⛈️", "Heavy showers"],
+  85: ["🌨️", "Snow showers"], 86: ["❄️", "Snow showers"], 95: ["⛈️", "Thunderstorm"],
+  96: ["⛈️", "Storm & hail"], 99: ["⛈️", "Storm & hail"],
+};
+async function loadWeather() {
+  const w = CFG.weather;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${w.lat}&longitude=${w.lon}` +
+    `&current=temperature_2m,apparent_temperature,weather_code,is_day` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+    `&timezone=${encodeURIComponent(w.timezone)}&forecast_days=4&temperature_unit=${w.temp_unit}`;
+  try {
+    const r = await (await fetch(url)).json();
+    const c = r.current;
+    let [icon, desc] = WMO[c.weather_code] || ["·", "—"];
+    if (!c.is_day && c.weather_code <= 1) icon = "🌙";
+    $("wIcon").textContent = icon;
+    $("wTemp").textContent = Math.round(c.temperature_2m) + "°";
+    $("wDesc").textContent = `${desc} · feels ${Math.round(c.apparent_temperature)}°`;
+    const d = r.daily, days = [];
+    for (let i = 1; i <= 3; i++) {
+      const name = new Date(d.time[i] + "T12:00").toLocaleDateString("en-GB", { weekday: "short" });
+      const [ic] = WMO[d.weather_code[i]] || ["·"];
+      days.push(`<div class="day"><div class="d">${name}</div><div class="i">${ic}</div>
+        <div class="t">${Math.round(d.temperature_2m_max[i])}° / ${Math.round(d.temperature_2m_min[i])}°</div>
+        <div class="p">💧${d.precipitation_probability_max[i] ?? 0}%</div></div>`);
+    }
+    $("wDays").innerHTML = days.join("");
+  } catch (e) {
+    $("wDesc").textContent = "Weather unavailable";
+  }
+}
+
+// ---------- Full-screen viewer ----------
+let fullTimer = null;
+function openFull(src, isDrawing) {
+  $("fullImg").src = src;
+  $("full").classList.toggle("drawing", isDrawing);
+  $("full").classList.add("open");
+  clearTimeout(fullTimer);
+  fullTimer = setTimeout(closeFull, 60 * 1000);  // back to the dashboard after a minute
+}
+function closeFull() { $("full").classList.remove("open"); clearTimeout(fullTimer); }
+$("full").addEventListener("click", closeFull);
+
+// ---------- Photo slideshow: tap = full screen, swipe = next/previous ----------
+let photos = [], pIdx = -1, front = "imgA", photoTimer = null, known = null, queue = [];
+async function loadPhotos() {
+  let list;
+  try { list = await (await fetch("/api/photos")).json(); } catch { return; }
+  if (known) queue.push(...list.filter(f => !known.has(f)));  // just arrived: show these first
+  known = new Set(list); photos = list;
+  $("photosEmpty").style.display = photos.length ? "none" : "grid";
+  if (photos.length && (pIdx === -1 || queue.length)) showPhoto(1);
+}
+function showPhoto(step) {
+  if (!photos.length) return;
+  const q = queue.shift();
+  pIdx = q !== undefined && photos.includes(q) ? photos.indexOf(q)
+       : ((pIdx + step) % photos.length + photos.length) % photos.length;
+  const back = front === "imgA" ? "imgB" : "imgA", img = $(back);
+  img.onload = () => { img.classList.add("show"); $(front).classList.remove("show"); front = back; };
+  img.src = "/photos/" + encodeURIComponent(photos[pIdx]);
+  clearTimeout(photoTimer);
+  photoTimer = setTimeout(() => showPhoto(1), CFG.photo_seconds * 1000);
+}
+let downX = null;
+$("photos").addEventListener("pointerdown", e => { downX = e.clientX; });
+$("photos").addEventListener("pointerup", e => {
+  if (downX === null) return;
+  const dx = e.clientX - downX; downX = null;
+  if (Math.abs(dx) > 40) return showPhoto(dx < 0 ? 1 : -1);
+  if (photos.length && pIdx >= 0) openFull($(front).src, false);
+});
+
+// ---------- Drawing ----------
+let lastTs = -1;
+function ago(ts) {
+  const s = Math.floor(Date.now() / 1000 - ts);
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + " min ago";
+  if (s < 86400) return Math.floor(s / 3600) + " h ago";
+  return Math.floor(s / 86400) + " d ago";
+}
+async function checkDrawing() {
+  try {
+    const m = await (await fetch("/api/drawing")).json();
+    if (m.ts && m.ts !== lastTs) {
+      $("drawImg").src = "/drawing.png?t=" + m.ts;
+      $("square").classList.add("has");
+      $("drawNote").textContent = m.note || "";
+      if (lastTs !== -1) $("square").classList.add("fresh");
+      lastTs = m.ts;
+    }
+    if (m.ts) { $("drawAgo").textContent = ago(m.ts); $("drawAgoChip").classList.remove("hide"); }
+  } catch {}
+}
+$("square").addEventListener("click", () => {
+  $("square").classList.remove("fresh");
+  if (lastTs > 0) openFull($("drawImg").src, true);
+});
+
+// ---------- Sleep: off at night, tap to wake, moon button to sleep now ----------
+let asleep = null, manual = false, wakeUntil = 0, wasNight = null;
+const mins = hhmm => { const [h, m] = hhmm.split(":").map(Number); return h * 60 + m; };
+const wakeMs = () => (CFG.sleep?.wake_minutes ?? 2) * 60000;
+function isNight() {
+  const s = CFG.sleep; if (!s) return false;
+  const n = new Date(), now = n.getHours() * 60 + n.getMinutes(), off = mins(s.off), on = mins(s.on);
+  return off > on ? (now >= off || now < on) : (now >= off && now < on);
+}
+function setSleep(v) {
+  if (v === asleep) return;
+  asleep = v;
+  $("sleep").classList.toggle("on", v);
+  if (v) closeFull();
+  fetch("/api/screen", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ on: !v }) }).catch(() => {});
+}
+function checkSleep() {
+  const night = isNight();
+  if (wasNight && !night) manual = false;  // morning: always come back on
+  wasNight = night;
+  setSleep(manual || (night && Date.now() > wakeUntil));
+}
+function wake() { manual = false; wakeUntil = Date.now() + wakeMs(); checkSleep(); }
+$("sleep").addEventListener("click", wake);
+$("moon").addEventListener("click", e => { e.stopPropagation(); manual = true; checkSleep(); });
+document.addEventListener("pointerdown", () => { if (!asleep && isNight()) wakeUntil = Date.now() + wakeMs(); });
+
+// ---------- Boot ----------
+(async () => {
+  CFG = await (await fetch("/api/config")).json();
+  renderClocks(); setInterval(renderClocks, 1000);
+  loadWeather(); setInterval(loadWeather, 10 * 60 * 1000);
+  loadPhotos(); setInterval(loadPhotos, 20 * 1000);
+  checkDrawing(); setInterval(checkDrawing, 5000);
+  checkSleep(); setInterval(checkSleep, 10 * 1000);
+  // Reload once a day at ~4am to keep the browser fresh
+  setInterval(() => { const n = new Date(); if (n.getHours() === 4 && n.getMinutes() === 0) location.reload(); }, 60000);
+})();
+</script>
+</body>
+</html>
