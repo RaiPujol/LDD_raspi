@@ -4,7 +4,20 @@
 
 The screen at home always shows the time and weather, a slideshow of your photos, and the latest drawing from your partner. Your partner gets a private link on their phone. From it they can draw something or send photos straight from their camera, and it appears on the screen within seconds.
 
+![The dashboard running on a Raspberry Pi 7" touchscreen](docs/device.jpg)
+
+## Screenshots
+
+**What's on the Pi screen:** main clock, weather, photo slideshow, the latest drawing, world clocks.
+
 ![Dashboard](docs/screenshot.png)
+
+<table>
+  <tr>
+    <td width="32%" valign="top"><b>Partner's phone</b><br>Draw, add a message, send. Or send photos from the camera or gallery.<br><br><img src="docs/phone.png" alt="Phone drawing page"></td>
+    <td valign="top"><b>Tap the drawing</b>: full screen<br><img src="docs/fullscreen-drawing.png" alt="Drawing full screen"><br><br><b>Tap a photo</b>: full screen, uncropped<br><img src="docs/fullscreen-photo.png" alt="Photo full screen"></td>
+  </tr>
+</table>
 
 ## Features
 
